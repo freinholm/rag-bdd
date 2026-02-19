@@ -1,4 +1,5 @@
 from .search_utils import DEFAULT_SEARCH_LIMIT, load_movies, load_stopwords
+import math
 from nltk.stem import PorterStemmer
 import os
 import pickle
@@ -19,13 +20,10 @@ class InvertedIndex:
         self.tf_path = os.path.join(CACHE_PATH, "term_frequencies.pkl")
         self.term_frequencies = defaultdict(Counter)
 
-    def __add_document(self, doc_id, text):
+    def __add_document(self, doc_id: int, text: str) -> None:
         tokens = tokenize_text(text)
-        for token in tokens:
-            if token in self.index:
-                self.index[token].union(set([doc_id]))
-            else:
-                self.index[token] = set([doc_id])
+        for token in set(tokens):
+            self.index[token].add(doc_id)
         self.term_frequencies[doc_id].update(tokens)
 
     def get_documents(self, term):
@@ -62,6 +60,16 @@ class InvertedIndex:
             raise ValueError("term must be a single token")
         token = tokens[0]
         return self.term_frequencies[doc_id][token]
+    
+    def get_idf(self, term: str) -> float:
+        tokens = tokenize_text(term)
+        print(tokens)
+        if len(tokens) != 1:
+            raise ValueError("term must be a single token")
+        token = tokens[0]
+        doc_count = len(self.docmap)
+        term_doc_count = len(self.index[token])
+        return math.log((doc_count + 1) / (term_doc_count + 1))
 
 
 def build_command() -> None:
@@ -137,3 +145,9 @@ def tf_command(doc_id: int, term: str) -> int:
     idx = InvertedIndex()
     idx.load()
     return idx.get_tf(doc_id, term)
+
+
+def idf_command(term: str) -> float:
+    idx = InvertedIndex()
+    idx.load()
+    return idx.get_idf(term)
