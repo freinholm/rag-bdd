@@ -151,3 +151,10 @@ def idf_command(term: str) -> float:
     idx = InvertedIndex()
     idx.load()
     return idx.get_idf(term)
+
+
+def tfidf_command(doc_id: int, term: str) -> float:
+    idx = InvertedIndex()
+    idx.load()
+    tfidf = idx.get_tf(doc_id, term) * idx.get_idf(term)
+    return tfidf
