@@ -1,4 +1,8 @@
-from .search_utils import DEFAULT_SEARCH_LIMIT, load_movies, load_stopwords
+from .search_utils import (
+    DEFAULT_SEARCH_LIMIT,
+    BM25_K1,
+    load_movies, 
+    load_stopwords)
 import math
 from nltk.stem import PorterStemmer
 import os
@@ -63,13 +67,25 @@ class InvertedIndex:
     
     def get_idf(self, term: str) -> float:
         tokens = tokenize_text(term)
-        print(tokens)
         if len(tokens) != 1:
             raise ValueError("term must be a single token")
         token = tokens[0]
         doc_count = len(self.docmap)
         term_doc_count = len(self.index[token])
         return math.log((doc_count + 1) / (term_doc_count + 1))
+
+    def get_bm25_idf(self, term: str) -> float:
+        tokens = tokenize_text(term)
+        if len(tokens) != 1:
+            raise ValueError("term must be a single token")
+        token = tokens[0]
+        doc_count = len(self.docmap)
+        term_doc_count = len(self.index[token])
+        return math.log(((doc_count - term_doc_count) + 0.5) / (term_doc_count + 0.5) +1)
+    
+    def get_bm25_tf(self, doc_id: int, term: str, k1: float = BM25_K1) -> float:
+        tf = self.get_tf(doc_id, term)
+        return (tf * (k1 + 1)) / (tf + k1)
 
 
 def build_command() -> None:
@@ -158,3 +174,18 @@ def tfidf_command(doc_id: int, term: str) -> float:
     idx.load()
     tfidf = idx.get_tf(doc_id, term) * idx.get_idf(term)
     return tfidf
+
+
+def bm25_idf_command(term: str) -> float:
+    idx = InvertedIndex()
+    idx.load()
+    bm25idf = idx.get_bm25_idf(term)
+    return bm25idf
+
+
+def bm25_tf_command(doc_id: int, term: str, k1: float = BM25_K1) -> float:
+    idx = InvertedIndex()
+    idx.load()
+    bm25_tf = idx.get_bm25_tf(doc_id, term, k1)
+    return bm25_tf
+    
