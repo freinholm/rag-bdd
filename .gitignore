@@ -12,3 +12,6 @@ wheels/
 # Data files (large)
 data/
 cache
+
+#Secrets
+.env
