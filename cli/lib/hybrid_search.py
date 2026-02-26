@@ -1,22 +1,22 @@
 import os
-
-from google import genai
+from typing import Optional
 
 from .keyword_search import InvertedIndex
-from .semantic_search import ChunkedSemanticSearch
-
+from .query_enhancement import enhance_query
+from .reranking import rerank
 from .search_utils import (
     DEFAULT_ALPHA,
     DEFAULT_SEARCH_LIMIT,
     RRF_K,
+    SEARCH_MULTIPLIER,
     format_search_result,
-    get_llm_apikey,
     load_movies,
-    )
+)
+from .semantic_search import ChunkedSemanticSearch
 
 
 class HybridSearch:
-    def __init__(self, documents):
+    def __init__(self, documents: list[dict]) -> None:
         self.documents = documents
         self.semantic_search = ChunkedSemanticSearch()
         self.semantic_search.load_or_create_chunk_embeddings(documents)
@@ -26,23 +26,23 @@ class HybridSearch:
             self.idx.build()
             self.idx.save()
 
-    def _bm25_search(self, query, limit):
+    def _bm25_search(self, query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
         self.idx.load()
         return self.idx.bm25_search(query, limit)
 
-    def rrf_search(self, query, k, limit=10):
-        bm25_results = self._bm25_search(query, limit * 500)
-        semantic_results = self.semantic_search.search_chunks(query, limit * 500)
-
-        fused = reciprocal_rank_fusion(bm25_results, semantic_results, k)
-        return fused[:limit]
-    
     def weighted_search(self, query: str, alpha: float, limit: int = 5) -> list[dict]:
         bm25_results = self._bm25_search(query, limit * 500)
         semantic_results = self.semantic_search.search_chunks(query, limit * 500)
 
         combined = combine_search_results(bm25_results, semantic_results, alpha)
         return combined[:limit]
+
+    def rrf_search(self, query: str, k: int, limit: int = 10) -> list[dict]:
+        bm25_results = self._bm25_search(query, limit * 500)
+        semantic_results = self.semantic_search.search_chunks(query, limit * 500)
+
+        fused = reciprocal_rank_fusion(bm25_results, semantic_results, k)
+        return fused[:limit]
 
 
 def normalize_scores(scores: list[float]) -> list[float]:
@@ -58,7 +58,6 @@ def normalize_scores(scores: list[float]) -> list[float]:
     normalized_scores = []
     for s in scores:
         normalized_scores.append((s - min_score) / (max_score - min_score))
-
     return normalized_scores
 
 
@@ -207,100 +206,34 @@ def weighted_search_command(
 def rrf_search_command(
     query: str,
     k: int = RRF_K,
+    enhance: Optional[str] = None,
+    rerank_method: Optional[str] = None,
     limit: int = DEFAULT_SEARCH_LIMIT,
-    enhance=None
 ) -> dict:
     movies = load_movies()
     searcher = HybridSearch(movies)
 
     original_query = query
+    enhanced_query = None
+    if enhance:
+        enhanced_query = enhance_query(query, method=enhance)
+        query = enhanced_query
 
-    match enhance:
-        case "spell":
-            query = enhance_query_spell(original_query)
-        case "rewrite":
-            query = enhance_query_rewrite(original_query)
-        case "expand":
-            query = enhance_query_expand(original_query)
-    
-    if enhance != None:
-        print(f"Enhanced query ({enhance}): '{original_query}' -> '{query}'")
-
-    search_limit = limit
+    search_limit = limit * SEARCH_MULTIPLIER if rerank_method else limit
     results = searcher.rrf_search(query, k, search_limit)
+
+    reranked = False
+    if rerank_method:
+        results = rerank(query, results, method=rerank_method, limit=limit)
+        reranked = True
 
     return {
         "original_query": original_query,
+        "enhanced_query": enhanced_query,
+        "enhance_method": enhance,
         "query": query,
         "k": k,
+        "rerank_method": rerank_method,
+        "reranked": reranked,
         "results": results,
     }
-
-
-def run_llm(prompt) -> str:
-    api_key = get_llm_apikey()
-
-    client = genai.Client(api_key = api_key)
-
-    res = client.models.generate_content(
-        model='gemini-2.5-flash', 
-        contents=prompt
-        )
-
-    return res.text
-
-
-def enhance_query_spell(query=str) -> str:
-    prompt = f"""Fix any spelling errors in this movie search query.
-
-Only correct obvious typos. Don't change correctly spelled words.
-
-Query: "{query}"
-
-If no errors, return the original query.
-Corrected:"""
-
-    return run_llm(prompt)
-
-
-def enhance_query_rewrite(query=str) -> str:
-    prompt = f"""Rewrite this movie search query to be more specific and searchable.
-
-Original: "{query}"
-
-Consider:
-- Common movie knowledge (famous actors, popular films)
-- Genre conventions (horror = scary, animation = cartoon)
-- Keep it concise (under 10 words)
-- It should be a google style search query that's very specific
-- Don't use boolean logic
-
-Examples:
-
-- "that bear movie where leo gets attacked" -> "The Revenant Leonardo DiCaprio bear attack"
-- "movie about bear in london with marmalade" -> "Paddington London marmalade"
-- "scary movie with bear from few years ago" -> "bear horror movie 2015-2020"
-
-Rewritten query:"""
-    
-    return run_llm(prompt)
-
-def enhance_query_expand(query) -> str:
-    prompt = f"""Expand this movie search query with related terms.
-
-Add synonyms and related concepts that might appear in movie descriptions.
-Keep expansions relevant and focused.
-This will be appended to the original query.
-
-Examples:
-
-- "scary bear movie" -> "scary horror grizzly bear movie terrifying film"
-- "action movie with bear" -> "action thriller bear chase fight adventure"
-- "comedy with bear" -> "comedy funny bear humor lighthearted"
-
-Query: "{query}"
-"""
-    
-    return run_llm(prompt)
-
-

@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 DEFAULT_ALPHA = 0.5
 RRF_K = 60
+SEARCH_MULTIPLIER = 5
 
 DEFAULT_SEARCH_LIMIT = 5
 DOCUMENT_PREVIEW_LENGTH = 100
@@ -62,7 +63,3 @@ def format_search_result(
         "score": round(score, SCORE_PRECISION),
         "metadata": metadata if metadata else {},
     }
-
-def get_llm_apikey() -> str:
-    load_dotenv()
-    return os.environ.get("GEMINI_API_KEY")
