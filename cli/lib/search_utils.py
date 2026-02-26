@@ -1,6 +1,7 @@
 import json
 import os
 from typing import Any
+from dotenv import load_dotenv
 
 DEFAULT_ALPHA = 0.5
 RRF_K = 60
@@ -61,3 +62,7 @@ def format_search_result(
         "score": round(score, SCORE_PRECISION),
         "metadata": metadata if metadata else {},
     }
+
+def get_llm_apikey() -> str:
+    load_dotenv()
+    return os.environ.get("GEMINI_API_KEY")

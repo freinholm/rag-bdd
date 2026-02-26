@@ -45,6 +45,12 @@ def main() -> None:
     rrf_parser.add_argument(
         "--limit", type=int, default=5, help="Number of results to return (default=5)"
     )
+    rrf_parser.add_argument(
+        "--enhance",
+        type=str,
+        choices=["spell", "rewrite", "expand"],
+        help="Query enhancement method",
+    )
 
     args = parser.parse_args()
 
@@ -73,7 +79,7 @@ def main() -> None:
                 print(f"   {res['document'][:100]}...")
                 print()
         case "rrf-search":
-            result = rrf_search_command(args.query, args.k, args.limit)
+            result = rrf_search_command(args.query, args.k, args.limit, args.enhance)
 
             print(
                 f"Reciprocal Rank Fusion Results for '{result['query']}' (k={result['k']}):"
