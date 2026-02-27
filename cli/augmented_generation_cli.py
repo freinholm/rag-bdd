@@ -2,6 +2,7 @@ import argparse
 
 from lib.augmented_generation import (
     citations_command,
+    question_command,
     rag_command, 
     summarize_command, 
     )
@@ -32,6 +33,12 @@ def main():
         "--limit", type=int, default=5, help="Override search result limit (default 5)"
     )
 
+    question_parser = subparsers.add_parser("question", help="Generate a RAG-supported response to the question")
+    question_parser.add_argument("query", type=str, help="Question for LLM response based on movies dataset.")
+    question_parser.add_argument(
+        "--limit", type=int, default=5, help="Override search result limit (default 5)"
+    )
+
     args = parser.parse_args()
 
     match args.command:
@@ -59,6 +66,14 @@ def main():
             print()
             print("LLM Answer:")
             print(result["answer"])
+        case "question":
+            result = question_command(args.query, args.limit)
+            print("Search Results:")
+            for document in result["search_results"]:
+                print(f"  - {document['title']}")
+            print()
+            print("Answer:")
+            print(result["answer"])        
         case _:
             parser.print_help()
 
